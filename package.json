@@ -1,11 +1,13 @@
 {
-  "name": "finance-tracker-backend",
-  "version": "2.0.0",
-  "description": "Multi-user Personal Finance Tracker with Double-Entry Bookkeeping",
+  "name": "enoughfi-api",
+  "version": "4.0.0",
+  "description": "EnoughFi — Personal Finance Tracker API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "seed-demo": "node seed-demo.js",
+    "setup-admin": "node setup-admin.js"
   },
   "dependencies": {
     "express": "^4.18.2",

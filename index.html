@@ -13,12 +13,16 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>" />
     <title>EnoughFi — Your Path to Financial Independence</title>
     <script>
-        // ===== CONFIGURE YOUR API URL HERE =====
-        window.__ENOUGHFI_API__ = "https://api.enoughfi.com/api";
-        // If using Render subdomain: "https://enoughfi-api.onrender.com/api"
+        // ============================================
+        // CHANGE THIS to your Render backend URL
+        // After deploy, Render gives you a URL like: https://enoughfi-api.onrender.com
+        // Add /api at the end
+        // ============================================
+        window.__ENOUGHFI_API__ = "https://enoughfi-api.onrender.com/api";
     </script>
 </head>
 <body>
     <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
