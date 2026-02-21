@@ -1,29 +1,19 @@
 {
-  "name": "enoughfi-api",
+  "name": "enoughfi-frontend",
+  "private": true,
   "version": "4.0.0",
-  "description": "EnoughFi — Personal Finance Tracker API",
-  "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "seed-demo": "node seed-demo.js",
-    "setup-admin": "node setup-admin.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "pg": "^8.11.3",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5",
-    "dotenv": "^16.3.1",
-    "multer": "^1.4.5-lts.1",
-    "papaparse": "^5.4.1",
-    "pdfjs-dist": "^3.11.174",
-    "xlsx": "^0.18.5"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
-  "engines": {
-    "node": ">=16.0.0"
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.1.0"
   }
 }
