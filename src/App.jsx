@@ -1073,74 +1073,251 @@ function AdminTab({toast}) {
 // ============================================================
 // TRANSACTIONS TAB (adapted from v4)
 // ============================================================
+// ============================================================
+// TRANSACTIONS TAB — Reimagined with monthly view, date groups, visual coding
+// ============================================================
+const CATEGORY_EMOJIS = {
+  'Rent/EMI':'🏠','Groceries':'🛒','Utilities':'💡','Transport':'🚗','Fuel':'⛽','Dining Out':'🍕','Dining':'🍕',
+  'Shopping':'🛍️','Health':'🏥','Insurance':'🛡️','Education':'📚','SIP/Investments':'📈','Investment':'📈',
+  'Sending to Family':'💝','Remittance':'💝','Entertainment':'🎬','Subscriptions':'📺','Travel':'✈️',
+  'Salary':'💼','Income':'💵','Freelance':'💻','Dividend':'📊','Interest':'🏦','Bonus':'🎁','Gift':'🎁',
+  'Loan':'📝','EMI':'🏠','Credit Card':'💳','Transfer':'🔄','Reimbursement':'♻️',
+  'Food':'🍽️','Medical':'💊','Personal':'👤','Clothing':'👔','Electronics':'📱','Household':'🏡',
+  'Other Expenses':'📦','Other':'📦','Uncategorized':'📋','Miscellaneous':'📋'
+};
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 function TransactionsTab({accounts,toast,initialAccountId}) {
   const [txns,setTxns]=useState([]);const [loading,setLoading]=useState(true);
-  const [selectedFY,setSelectedFY]=useState(getCurrentFY());
+  const [selectedMonth,setSelectedMonth]=useState(()=>{const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`});
   const [showImport,setShowImport]=useState(false);
   const [showAdd,setShowAdd]=useState(false);
   const [editTx,setEditTx]=useState(null);
   const [filterAccount,setFilterAccount]=useState(initialAccountId||"");
-  const [filterCategory,setFilterCategory]=useState("");
   const [searchQ,setSearchQ]=useState("");
-  const [page,setPage]=useState(1);
+  const [showFilters,setShowFilters]=useState(false);
+
+  // Generate month options (last 24 months)
+  const monthOptions = useMemo(()=>{
+    const opts=[];
+    const now=new Date();
+    for(let i=0;i<24;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+      const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label=`${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+      opts.push({key,label,month:d.getMonth(),year:d.getFullYear()});
+    }
+    return opts;
+  },[]);
+
+  const currentMonthLabel = monthOptions.find(m=>m.key===selectedMonth)?.label || selectedMonth;
 
   const loadTxns = useCallback(async()=>{
     setLoading(true);
     try{
-      const fy = getFYRange(selectedFY);
-      const params = new URLSearchParams({start_date:fy.start,end_date:fy.end,limit:"200",offset:String((page-1)*200)});
+      const [year,month] = selectedMonth.split('-').map(Number);
+      const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
+      const endDate = new Date(year,month,0); // Last day of month
+      const endStr = `${year}-${String(month).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
+      const params = new URLSearchParams({start_date:startDate,end_date:endStr,limit:"500",offset:"0"});
       if(filterAccount) params.set("account_id",filterAccount);
-      if(filterCategory) params.set("category",filterCategory);
       if(searchQ) params.set("search",searchQ);
       const data = await api.getTransactions(params.toString());
       setTxns(data.transactions||data);
     } catch(e){toast(e.message,"error")}
     setLoading(false);
-  },[selectedFY,filterAccount,filterCategory,searchQ,page]);
+  },[selectedMonth,filterAccount,searchQ]);
 
   useEffect(()=>{loadTxns()},[loadTxns]);
 
-  const categories = useMemo(()=>[...new Set(txns.map(t=>t.category).filter(Boolean))].sort(),[txns]);
+  // Classify transaction type
+  const classifyTx = (tx) => {
+    const debitType = accounts.find(a=>a.account_id===tx.debit_account_id)?.account_type;
+    const creditType = accounts.find(a=>a.account_id===tx.credit_account_id)?.account_type;
+    if (debitType==='Expense') return 'expense';
+    if (creditType==='Income') return 'income';
+    if (debitType==='Asset' && creditType==='Asset') return 'transfer';
+    if (debitType==='Liability') return 'payment';
+    return 'other';
+  };
+
+  const txTypeConfig = {
+    expense: { color: T.fire, bg: T.fireLight, label: 'Spent', sign: '-' },
+    income: { color: T.accent, bg: T.accentLight, label: 'Earned', sign: '+' },
+    transfer: { color: T.blue, bg: T.blueLight, label: 'Transfer', sign: '↔' },
+    payment: { color: T.purple, bg: '#F3F0FF', label: 'Payment', sign: '→' },
+    other: { color: T.textSec, bg: T.surfaceAlt, label: 'Other', sign: '·' },
+  };
+
+  // Monthly summary
+  const monthlySummary = useMemo(()=>{
+    let income=0, expense=0, transfers=0;
+    txns.forEach(tx=>{
+      const type = classifyTx(tx);
+      const amt = parseFloat(tx.amount||0);
+      if(type==='income') income+=amt;
+      else if(type==='expense') expense+=amt;
+      else transfers+=amt;
+    });
+    return { income, expense, saved: income - expense, transfers, count: txns.length };
+  },[txns,accounts]);
+
+  // Group transactions by date
+  const dateGroups = useMemo(()=>{
+    const groups={};
+    txns.forEach(tx=>{
+      const dateKey = tx.date?.split('T')[0] || tx.date;
+      if(!groups[dateKey]) groups[dateKey]=[];
+      groups[dateKey].push(tx);
+    });
+    return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0]));
+  },[txns]);
+
+  const formatGroupDate = (dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const today = new Date(); today.setHours(0,0,0,0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+    if (d.getTime()===today.getTime()) return 'Today';
+    if (d.getTime()===yesterday.getTime()) return 'Yesterday';
+    return d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+  };
+
+  const getGroupTotal = (txnGroup) => {
+    let spend=0;
+    txnGroup.forEach(tx=>{if(classifyTx(tx)==='expense') spend+=parseFloat(tx.amount||0)});
+    return spend;
+  };
+
+  // Navigate months
+  const goMonth = (dir) => {
+    const idx = monthOptions.findIndex(m=>m.key===selectedMonth);
+    const newIdx = idx + (dir==='prev'?1:-1);
+    if(newIdx>=0 && newIdx<monthOptions.length) setSelectedMonth(monthOptions[newIdx].key);
+  };
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {/* Month Navigator */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <h2 style={{fontSize:20,fontWeight:800,letterSpacing:"-0.03em"}}>Transactions</h2>
+        <button onClick={()=>goMonth('prev')} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,padding:"4px 8px",color:T.textSec}}>‹</button>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.03em"}}>{currentMonthLabel}</div>
+          <div style={{fontSize:12,color:T.textTer}}>{monthlySummary.count} transactions</div>
+        </div>
+        <button onClick={()=>goMonth('next')} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,padding:"4px 8px",color:selectedMonth===monthOptions[0]?.key?T.borderLight:T.textSec}}
+          disabled={selectedMonth===monthOptions[0]?.key}>›</button>
+      </div>
+
+      {/* Month Summary Cards */}
+      {!loading && txns.length > 0 && (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          <div style={{background:T.accentLight,borderRadius:T.radiusSm,padding:"12px 10px",textAlign:"center"}}>
+            <div style={{fontSize:10,fontWeight:700,color:T.accent,textTransform:"uppercase",letterSpacing:"0.04em"}}>Earned</div>
+            <div style={{fontSize:16,fontWeight:900,color:T.accentDark,letterSpacing:"-0.02em"}}>₹{fmt(monthlySummary.income)}</div>
+          </div>
+          <div style={{background:T.fireLight,borderRadius:T.radiusSm,padding:"12px 10px",textAlign:"center"}}>
+            <div style={{fontSize:10,fontWeight:700,color:T.fire,textTransform:"uppercase",letterSpacing:"0.04em"}}>Spent</div>
+            <div style={{fontSize:16,fontWeight:900,color:T.fireDark,letterSpacing:"-0.02em"}}>₹{fmt(monthlySummary.expense)}</div>
+          </div>
+          <div style={{background:monthlySummary.saved>=0?'#D1FAE5':'#FEE2E2',borderRadius:T.radiusSm,padding:"12px 10px",textAlign:"center"}}>
+            <div style={{fontSize:10,fontWeight:700,color:monthlySummary.saved>=0?T.accent:T.danger,textTransform:"uppercase",letterSpacing:"0.04em"}}>Saved</div>
+            <div style={{fontSize:16,fontWeight:900,color:monthlySummary.saved>=0?T.accentDark:'#dc2626',letterSpacing:"-0.02em"}}>₹{fmt(Math.abs(monthlySummary.saved))}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Actions Row */}
+      <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center"}}>
+        <button onClick={()=>setShowFilters(!showFilters)}
+          style={{background:showFilters||filterAccount||searchQ?T.accentLight:T.surfaceAlt,border:`1px solid ${showFilters||filterAccount||searchQ?T.accent+'40':T.border}`,
+            borderRadius:T.radiusSm,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font,
+            color:showFilters||filterAccount||searchQ?T.accent:T.textSec}}>
+          🔍 Filter{(filterAccount||searchQ)?' ●':''}
+        </button>
         <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" size="sm" onClick={()=>setShowImport(true)}>Import</Btn>
+          <Btn variant="secondary" size="sm" onClick={()=>setShowImport(true)}>📎 Import</Btn>
           <Btn size="sm" onClick={()=>{setEditTx(null);setShowAdd(true)}}>+ Add</Btn>
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <select value={selectedFY} onChange={e=>setSelectedFY(parseInt(e.target.value))}
-          style={{padding:"6px 12px",borderRadius:T.radiusSm,border:`1.5px solid ${T.border}`,fontSize:13,fontFamily:T.font,fontWeight:600,background:T.surface}}>
-          {Array.from({length:5},(_,i)=>getCurrentFY()-i).map(fy=><option key={fy} value={fy}>{getFYLabel(fy)}</option>)}
-        </select>
-        <select value={filterAccount} onChange={e=>setFilterAccount(e.target.value)}
-          style={{padding:"6px 12px",borderRadius:T.radiusSm,border:`1.5px solid ${T.border}`,fontSize:13,fontFamily:T.font,background:T.surface}}>
-          <option value="">All Accounts</option>
-          {accounts.map(a=><option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
-        </select>
-        <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search..."
-          style={{padding:"6px 12px",borderRadius:T.radiusSm,border:`1.5px solid ${T.border}`,fontSize:13,fontFamily:T.font,flex:1,minWidth:100}}/>
-      </div>
+      {/* Expandable Filters */}
+      {showFilters && (
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"8px 12px",background:T.surfaceAlt,borderRadius:T.radiusSm,animation:"fadeIn .2s ease"}}>
+          <select value={filterAccount} onChange={e=>setFilterAccount(e.target.value)}
+            style={{padding:"6px 10px",borderRadius:T.radiusSm,border:`1px solid ${T.border}`,fontSize:12,fontFamily:T.font,background:T.surface,flex:1,minWidth:120}}>
+            <option value="">All Accounts</option>
+            {accounts.map(a=><option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
+          </select>
+          <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search..."
+            style={{padding:"6px 10px",borderRadius:T.radiusSm,border:`1px solid ${T.border}`,fontSize:12,fontFamily:T.font,flex:1,minWidth:100}}/>
+          {(filterAccount||searchQ) && (
+            <button onClick={()=>{setFilterAccount("");setSearchQ("")}}
+              style={{background:"none",border:"none",color:T.danger,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Clear</button>
+          )}
+        </div>
+      )}
 
-      {loading ? <div style={{textAlign:"center",padding:30}}><Spin/></div> : txns.length === 0 ? (
-        <div style={{textAlign:"center",padding:40,color:T.textSec}}>No transactions found</div>
+      {/* Transaction List */}
+      {loading ? <div style={{textAlign:"center",padding:40}}><Spin/></div> : txns.length === 0 ? (
+        <div style={{textAlign:"center",padding:"50px 20px"}}>
+          <div style={{fontSize:40,marginBottom:8}}>📋</div>
+          <div style={{fontSize:15,fontWeight:600,color:T.textSec,marginBottom:4}}>No transactions this month</div>
+          <div style={{fontSize:13,color:T.textTer}}>Use Quick Add (green ₹ button) or Import to add transactions</div>
+        </div>
       ) : (
-        <div style={{background:T.surface,borderRadius:T.radius,border:`1px solid ${T.border}`,overflow:"hidden"}}>
-          {txns.map((tx,i)=>(
-            <div key={tx.transaction_id} onClick={()=>{setEditTx(tx);setShowAdd(true)}}
-              style={{padding:"12px 16px",borderBottom:i<txns.length-1?`1px solid ${T.borderLight}`:"none",cursor:"pointer",transition:"background .1s",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:14,fontWeight:600,marginBottom:2}}>{tx.description||tx.category||"Transaction"}</div>
-                <div style={{fontSize:12,color:T.textTer}}>{fmtDate(tx.date)} · {tx.debit_account_name} → {tx.credit_account_name}</div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {dateGroups.map(([dateKey, dayTxns]) => {
+            const daySpend = getGroupTotal(dayTxns);
+            return (
+              <div key={dateKey}>
+                {/* Date Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 4px",marginBottom:6}}>
+                  <div style={{fontSize:13,fontWeight:700,color:T.textSec}}>{formatGroupDate(dateKey)}</div>
+                  {daySpend > 0 && <div style={{fontSize:11,fontWeight:600,color:T.fire}}>-₹{daySpend.toLocaleString("en-IN",{maximumFractionDigits:0})}</div>}
+                </div>
+
+                {/* Day's Transactions */}
+                <div style={{background:T.surface,borderRadius:T.radius,border:`1px solid ${T.border}`,overflow:"hidden"}}>
+                  {dayTxns.map((tx,i)=>{
+                    const type = classifyTx(tx);
+                    const config = txTypeConfig[type];
+                    const emoji = CATEGORY_EMOJIS[tx.category] || CATEGORY_EMOJIS[tx.debit_account_name] || (type==='income'?'💵':type==='expense'?'💸':type==='transfer'?'🔄':'📋');
+                    const amt = parseFloat(tx.amount||0);
+                    return (
+                      <div key={tx.transaction_id} onClick={()=>{setEditTx(tx);setShowAdd(true)}}
+                        style={{padding:"11px 14px",borderBottom:i<dayTxns.length-1?`1px solid ${T.borderLight}`:"none",
+                          cursor:"pointer",transition:"background .1s",display:"flex",alignItems:"center",gap:12}}
+                        onMouseEnter={e=>e.currentTarget.style.background=T.surfaceAlt}
+                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                        {/* Category Icon */}
+                        <div style={{width:38,height:38,borderRadius:10,background:config.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                          {emoji}
+                        </div>
+                        {/* Description */}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:14,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {tx.description || tx.category || tx.debit_account_name || "Transaction"}
+                          </div>
+                          <div style={{fontSize:11,color:T.textTer,marginTop:1}}>
+                            {tx.category && <span style={{background:config.bg,color:config.color,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600,marginRight:6}}>{tx.category}</span>}
+                            {tx.debit_account_name}
+                            {type==='transfer' && <span> → {tx.credit_account_name}</span>}
+                          </div>
+                        </div>
+                        {/* Amount */}
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontSize:15,fontWeight:800,color:config.color,letterSpacing:"-0.02em"}}>
+                            {type==='income'?'+':type==='expense'?'-':''}₹{amt.toLocaleString("en-IN",{maximumFractionDigits:0})}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div style={{fontSize:15,fontWeight:700,color:T.text}}>₹{fmt(tx.amount)}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1258,42 +1435,142 @@ function ImportModal({open,onClose,onSuccess,toast,accounts}) {
 }
 
 // ============================================================
-// ACCOUNTS TAB (adapted from v4)
+// ACCOUNTS TAB — Reimagined with Net Worth hero + tabbed categories
 // ============================================================
+const ACCOUNT_EMOJIS = {
+  'Bank':'🏦','Investment':'📈','Fixed Asset':'🏠','Retirement':'🏛️','Cash':'💵','Receivable':'🤝','Other':'💎',
+  'Loan':'📝','Credit Card':'💳','Personal Loan':'🤝','Mortgage':'🏠',
+  'Salary':'💼','Freelance':'💻','Rental':'🏠','Dividend':'📊','Interest':'🏦',
+  'Rent/EMI':'🏠','Groceries':'🛒','Utilities':'💡','Transport':'🚗','Dining Out':'🍕','Shopping':'🛍️',
+  'Health':'🏥','Education':'📚','SIP/Investments':'📈','Sending to Family':'💝',
+  'Entertainment':'🎬','Travel':'✈️','Other Expenses':'📦','Uncategorized':'📦'
+};
+const ACCT_TAB_CONFIG = [
+  { type:'Asset', label:'What I Own', emoji:'💰', color:'#059669', lightBg:'#D1FAE5' },
+  { type:'Liability', label:'What I Owe', emoji:'💳', color:'#dc2626', lightBg:'#FEE2E2' },
+  { type:'Income', label:'Money In', emoji:'📥', color:'#2563eb', lightBg:'#EFF6FF' },
+  { type:'Expense', label:'Money Out', emoji:'📤', color:'#d97706', lightBg:'#FEF3C7' },
+];
+
 function AccountsTab({accounts,refreshAccounts,toast,onViewAccount}) {
   const [showAdd,setShowAdd]=useState(false);
   const [editAcc,setEditAcc]=useState(null);
+  const [activeTab,setActiveTab]=useState('Asset');
   const grouped=useMemo(()=>{const g={};accounts.forEach(a=>{if(!g[a.account_type])g[a.account_type]=[];g[a.account_type].push(a)});return g},[accounts]);
+
+  const totalAssets = (grouped.Asset||[]).reduce((s,a)=>s+parseFloat(a.current_balance||0),0);
+  const totalLiabilities = (grouped.Liability||[]).reduce((s,a)=>s+parseFloat(a.current_balance||0),0);
+  const netWorth = totalAssets - totalLiabilities;
+  const activeAccounts = (grouped[activeTab]||[]).sort((a,b)=>parseFloat(b.current_balance||0)-parseFloat(a.current_balance||0));
+  const activeConfig = ACCT_TAB_CONFIG.find(t=>t.type===activeTab);
+  const activeTotal = activeAccounts.reduce((s,a)=>s+parseFloat(a.current_balance||0),0);
+  const maxBalance = Math.max(...activeAccounts.map(a=>Math.abs(parseFloat(a.current_balance||0))),1);
+
+  // Include equity in net worth display
+  const equityAccounts = grouped.Equity||[];
+  const equityTotal = equityAccounts.reduce((s,a)=>s+parseFloat(a.current_balance||0),0);
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {/* Net Worth Hero */}
+      <div style={{background:`linear-gradient(135deg, ${T.accentDark}, #047857, #065F46)`,borderRadius:T.radiusXl,padding:"24px 20px",color:"#fff",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-30,right:-20,fontSize:120,opacity:0.06,pointerEvents:"none"}}>💰</div>
+        <div style={{fontSize:12,fontWeight:600,opacity:0.8,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:4}}>Net Worth</div>
+        <div style={{fontSize:34,fontWeight:900,letterSpacing:"-0.04em",marginBottom:2}}>
+          {netWorth >= 0 ? '₹' : '-₹'}{Math.abs(netWorth).toLocaleString("en-IN",{maximumFractionDigits:0})}
+        </div>
+        <div style={{fontSize:12,fontWeight:500,opacity:0.7,marginBottom:16}}>{numToWords(Math.abs(netWorth))}</div>
+
+        {/* Assets vs Liabilities bar */}
+        <div style={{display:"flex",gap:2,height:6,borderRadius:3,overflow:"hidden",marginBottom:10}}>
+          <div style={{flex:Math.max(totalAssets,1),background:"rgba(255,255,255,0.8)",borderRadius:"3px 0 0 3px",transition:"flex .5s"}}/>
+          <div style={{flex:Math.max(totalLiabilities,1),background:"rgba(239,68,68,0.7)",borderRadius:"0 3px 3px 0",transition:"flex .5s"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,opacity:0.85}}>
+          <span>💰 Own: ₹{totalAssets.toLocaleString("en-IN",{maximumFractionDigits:0})}</span>
+          <span>💳 Owe: ₹{totalLiabilities.toLocaleString("en-IN",{maximumFractionDigits:0})}</span>
+        </div>
+        {equityTotal !== 0 && (
+          <div style={{fontSize:11,opacity:0.6,marginTop:6,textAlign:"center"}}>Opening Balance: ₹{Math.abs(equityTotal).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
+        )}
+      </div>
+
+      {/* Category Tabs */}
+      <div style={{display:"flex",gap:4,background:T.surfaceAlt,borderRadius:T.radius,padding:4}}>
+        {ACCT_TAB_CONFIG.map(tab=>{
+          const isActive = activeTab===tab.type;
+          const count = (grouped[tab.type]||[]).length;
+          return (
+            <button key={tab.type} onClick={()=>setActiveTab(tab.type)}
+              style={{flex:1,padding:"10px 6px",borderRadius:T.radiusSm,border:"none",cursor:"pointer",fontFamily:T.font,
+                background:isActive?T.surface:"transparent",boxShadow:isActive?T.shadow:"none",
+                transition:"all .2s",textAlign:"center"}}>
+              <div style={{fontSize:18,marginBottom:2}}>{tab.emoji}</div>
+              <div style={{fontSize:10,fontWeight:isActive?700:500,color:isActive?tab.color:T.textTer,letterSpacing:"-0.01em",lineHeight:1.2}}>
+                {tab.label}
+              </div>
+              {count > 0 && <div style={{fontSize:9,color:T.textTer,marginTop:1}}>{count}</div>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Active Category Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <h2 style={{fontSize:20,fontWeight:800,letterSpacing:"-0.03em"}}>Accounts</h2>
+        <div>
+          <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.02em",color:activeConfig?.color}}>
+            {activeConfig?.emoji} {activeConfig?.label}
+          </div>
+          <div style={{fontSize:12,color:T.textSec,fontWeight:500}}>
+            Total: ₹{Math.abs(activeTotal).toLocaleString("en-IN",{maximumFractionDigits:0})}
+            {activeTotal > 0 && <span style={{color:T.textTer}}> ({numToWords(activeTotal)})</span>}
+          </div>
+        </div>
         <Btn size="sm" onClick={()=>{setEditAcc(null);setShowAdd(true)}}>+ Add</Btn>
       </div>
-      {Object.entries(grouped).map(([type,accs])=>{
-        const total=accs.reduce((s,a)=>s+parseFloat(a.current_balance||0),0);
-        return (
-          <div key={type}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"0 4px"}}>
-              <div style={{fontSize:13,fontWeight:700,color:typeColors[type]||T.textSec}}>{typeIcons[type]} {type}s</div>
-              <div style={{fontSize:13,fontWeight:700,color:typeColors[type]}}>{fmtFull(total)}</div>
-            </div>
-            <div style={{background:T.surface,borderRadius:T.radius,border:`1px solid ${T.border}`,overflow:"hidden"}}>
-              {accs.map((a,i)=>(
-                <div key={a.account_id} style={{padding:"12px 16px",borderBottom:i<accs.length-1?`1px solid ${T.borderLight}`:"none",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}
-                  onClick={()=>onViewAccount(a.account_id)}>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:600}}>{a.account_name}</div>
-                    {a.sub_type && <div style={{fontSize:11,color:T.textTer}}>{a.sub_type}</div>}
+
+      {/* Account Cards */}
+      {activeAccounts.length === 0 ? (
+        <div style={{textAlign:"center",padding:"40px 20px",color:T.textTer,fontSize:14}}>
+          No {activeConfig?.label?.toLowerCase()} accounts yet
+        </div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {activeAccounts.map(a=>{
+            const bal = parseFloat(a.current_balance||0);
+            const pct = maxBalance > 0 ? Math.abs(bal) / maxBalance * 100 : 0;
+            const emoji = ACCOUNT_EMOJIS[a.sub_type] || ACCOUNT_EMOJIS[a.account_name] || (activeTab==='Asset'?'💰':activeTab==='Liability'?'📝':activeTab==='Income'?'💵':'📦');
+            return (
+              <div key={a.account_id} onClick={()=>onViewAccount(a.account_id)}
+                style={{background:T.surface,borderRadius:T.radius,border:`1px solid ${T.border}`,padding:"14px 16px",cursor:"pointer",
+                  transition:"all .15s",position:"relative",overflow:"hidden"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=activeConfig?.color+'60'}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
+                {/* Progress bar background */}
+                <div style={{position:"absolute",top:0,left:0,height:"100%",width:`${pct}%`,background:activeConfig?.lightBg,opacity:0.5,transition:"width .5s",borderRadius:T.radius}}/>
+                <div style={{position:"relative",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{fontSize:24,width:36,textAlign:"center"}}>{emoji}</div>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:600,color:T.text}}>{a.account_name}</div>
+                      {a.sub_type && a.sub_type !== a.account_name && (
+                        <div style={{fontSize:11,color:T.textTer,marginTop:1}}>{a.sub_type}</div>
+                      )}
+                    </div>
                   </div>
-                  <div style={{fontSize:14,fontWeight:700}}>{fmtFull(a.current_balance)}</div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.02em",color:activeConfig?.color}}>
+                      ₹{Math.abs(bal).toLocaleString("en-IN",{maximumFractionDigits:0})}
+                    </div>
+                    {bal >= 100000 && <div style={{fontSize:10,color:T.textTer}}>{numToWords(bal)}</div>}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {showAdd && <AccountModal open={showAdd} onClose={()=>{setShowAdd(false);setEditAcc(null)}} editAcc={editAcc}
         onSave={async()=>{setShowAdd(false);setEditAcc(null);await refreshAccounts()}} toast={toast}/>}
     </div>
@@ -1546,8 +1823,8 @@ export default function App() {
   const isAdmin = user?.is_admin;
   const tabs=[
     {id:"home",label:"Home",icon:I.fire},
-    {id:"transactions",label:"Txns",icon:I.tx},
     {id:"accounts",label:"Accounts",icon:I.acc},
+    {id:"transactions",label:"Txns",icon:I.tx},
     {id:"reports",label:"Reports",icon:I.rep},
     ...(isAdmin?[{id:"admin",label:"Admin",icon:I.admin}]:[]),
     {id:"settings",label:"More",icon:I.set},
