@@ -90,13 +90,20 @@ const api = {
     const headers = {};
     if (!isFormData) headers["Content-Type"] = "application/json";
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
-    try {
+    const doFetch = async () => {
       const res = await fetch(`${API}${path}`, { method, headers, body: isFormData ? body : body ? JSON.stringify(body) : undefined });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
       return data;
+    };
+    try {
+      return await doFetch();
     } catch (err) {
-      if (err.message?.includes("Failed to fetch")) throw new Error("Server waking up (~30s). Please retry.");
+      if (err.message?.includes("Failed to fetch")) {
+        // Server likely waking up — retry once after 2s
+        await new Promise(r => setTimeout(r, 2000));
+        try { return await doFetch(); } catch { throw new Error("Server is starting up. Please try again in a few seconds."); }
+      }
       throw err;
     }
   },
@@ -279,6 +286,8 @@ const GlobalStyles = () => (
 // LANDING PAGE
 // ============================================================
 function LandingPage({onGetStarted, onDemo}) {
+  // Pre-warm the backend so it's ready when user clicks Login/Register
+  useEffect(()=>{fetch(`${API.replace('/api','')}/health`).catch(()=>{})},[]);
   return (
     <div style={{minHeight:"100vh",background:`linear-gradient(180deg, #F0FDF4 0%, ${T.bg} 40%)`,fontFamily:T.font}}>
       <GlobalStyles/>
@@ -427,6 +436,8 @@ function AuthScreen({onLogin,initialMode,onBack}) {
   const [pass,setPass]=useState("");
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
+  const [loadSec,setLoadSec]=useState(0);
+  useEffect(()=>{if(loading){setLoadSec(0);const t=setInterval(()=>setLoadSec(s=>s+1),1000);return()=>clearInterval(t)}},[loading]);
 
   const handleSubmit=async()=>{
     setLoading(true);setError("");
@@ -467,6 +478,9 @@ function AuthScreen({onLogin,initialMode,onBack}) {
           <Input label="Email" value={email} onChange={setEmail} type="email" placeholder="you@email.com" required/>
           <Input label="Password" value={pass} onChange={setPass} type="password" placeholder="••••••••" required/>
           <Btn full size="lg" onClick={handleSubmit} loading={loading}>{mode==="register"?"Create Account":"Log In"}</Btn>
+          {loading && loadSec > 3 && <div style={{textAlign:"center",fontSize:12,color:T.textTer,marginTop:8,lineHeight:1.5}}>
+            Server is waking up (~20-30s on first visit)...
+          </div>}
         </div>
 
         <div style={{textAlign:"center",marginTop:20,fontSize:14,color:T.textSec}}>
@@ -1441,14 +1455,17 @@ export default function App() {
     if(token){
       api.token=token;
       try{
+        // Run all startup calls in parallel instead of sequentially
         const u=await api.me();
         setUser(u);
-        setAccounts(await api.getAccounts());
-        // Check onboarding status
-        const ob = await api.getOnboarding();
+        const [accts, ob] = await Promise.all([
+          api.getAccounts(),
+          api.getOnboarding()
+        ]);
+        setAccounts(accts);
         if(ob.complete) {
           setPage("app");
-          loadFireData();
+          loadFireData(); // This can load in background
         } else {
           setPage("onboarding");
         }
@@ -1505,10 +1522,16 @@ export default function App() {
   const handleViewAccount=(accountId)=>{setViewAccountId(accountId);setTab("transactions")};
   const switchTab=(t)=>{if(t!=="transactions")setViewAccountId(null);setTab(t)};
 
+  const [loadTime, setLoadTime] = useState(0);
+  useEffect(()=>{if(init){const t=setInterval(()=>setLoadTime(s=>s+1),1000);return()=>clearInterval(t)}},[init]);
+
   if(init) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.bg,fontFamily:T.font}}>
     <div style={{textAlign:"center"}}>
       <Spin s={28}/>
       <div style={{marginTop:12,fontSize:14,color:T.textSec,fontWeight:500}}>Loading EnoughFi...</div>
+      {loadTime > 3 && <div style={{marginTop:8,fontSize:12,color:T.textTer,maxWidth:260,lineHeight:1.5}}>
+        Server is waking up — this takes ~20-30 seconds on first visit. Hang tight! 🔥
+      </div>}
     </div>
   </div>;
 
