@@ -51,6 +51,26 @@ const getMonthRange = (fy, monthIdx) => {
   const ny = month === 12 ? year + 1 : year;
   return { start, end: `${ny}-${String(nm).padStart(2,"0")}-01` };
 };
+// Number to Indian words converter
+const numToWords = (n) => {
+  const num = parseFloat(n) || 0;
+  if (num === 0) return "";
+  const abs = Math.abs(num);
+  if (abs >= 10000000) {
+    const cr = abs / 10000000;
+    return `${num < 0 ? "Minus " : ""}${cr % 1 === 0 ? cr : cr.toFixed(2)} Crore${cr !== 1 ? "s" : ""}`;
+  }
+  if (abs >= 100000) {
+    const lk = abs / 100000;
+    return `${num < 0 ? "Minus " : ""}${lk % 1 === 0 ? lk : lk.toFixed(2)} Lakh${lk !== 1 ? "s" : ""}`;
+  }
+  if (abs >= 1000) {
+    const th = abs / 1000;
+    return `${num < 0 ? "Minus " : ""}${th % 1 === 0 ? th : th.toFixed(1)} Thousand`;
+  }
+  return `${num < 0 ? "Minus " : ""}₹${abs.toLocaleString("en-IN")}`;
+};
+
 const typeColors = { Asset:"#059669", Liability:"#dc2626", Income:"#2563eb", Expense:"#d97706", Equity:"#7c3aed" };
 const typeIcons = { Asset:"↗", Liability:"↙", Income:"＋", Expense:"－", Equity:"◎" };
 const exportCSV = (rows, filename) => {
@@ -247,6 +267,9 @@ const GlobalStyles = () => (
     ::-webkit-scrollbar{width:4px;height:4px}
     ::-webkit-scrollbar-thumb{background:#d4d4d4;border-radius:3px}
     select option:disabled{color:#999;font-weight:600}
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+    input[type="number"]{-moz-appearance:textfield}
     input[type="range"]{-webkit-appearance:none;width:100%;height:6px;background:${T.border};border-radius:3px;outline:none}
     input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;background:${T.accent};border-radius:50%;cursor:pointer;box-shadow:0 2px 6px rgba(5,150,105,0.3)}
   `}</style>
@@ -289,13 +312,76 @@ function LandingPage({onGetStarted, onDemo}) {
         </div>
       </div>
 
+      {/* What is FIRE? */}
+      <div style={{maxWidth:640,margin:"0 auto",padding:"20px 24px 40px"}}>
+        <div style={{background:`linear-gradient(135deg, ${T.fireLight}, #FFF5EB)`,borderRadius:T.radiusXl,border:`1.5px solid ${T.fire}22`,padding:"28px 24px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:-20,right:-10,fontSize:80,opacity:0.08,pointerEvents:"none"}}>🔥</div>
+          <div style={{fontSize:13,fontWeight:700,color:T.fireDark,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>What is FIRE?</div>
+          <div style={{fontSize:22,fontWeight:800,color:T.text,letterSpacing:"-0.03em",marginBottom:12,lineHeight:1.3}}>
+            Financial Independence, Retire Early
+          </div>
+          <div style={{fontSize:15,color:T.textSec,lineHeight:1.7,marginBottom:16}}>
+            FIRE is the idea that if you save and invest enough, you can build a corpus that generates enough passive income to cover your living expenses — forever. That number is your <strong style={{color:T.fireDark}}>FIRE number</strong>.
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))",gap:10}}>
+            {[
+              { emoji:"🎯", label:"Your FIRE Number", desc:"25× your annual expenses" },
+              { emoji:"📊", label:"The 4% Rule", desc:"Withdraw 4% yearly, money lasts forever" },
+              { emoji:"🏖️", label:"Freedom", desc:"Work becomes a choice, not a compulsion" },
+            ].map((item,i) => (
+              <div key={i} style={{background:"rgba(255,255,255,0.7)",borderRadius:T.radiusSm,padding:"12px",textAlign:"center"}}>
+                <div style={{fontSize:24,marginBottom:4}}>{item.emoji}</div>
+                <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:2}}>{item.label}</div>
+                <div style={{fontSize:11,color:T.textSec,lineHeight:1.4}}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Morgan Housel Quotes */}
+      <div style={{maxWidth:640,margin:"0 auto",padding:"0 24px 40px"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{background:T.surface,borderRadius:T.radius,border:`1px solid ${T.border}`,padding:"20px 24px",boxShadow:T.shadow,position:"relative"}}>
+            <div style={{fontSize:32,color:T.accent,fontWeight:900,lineHeight:1,marginBottom:4,opacity:0.3}}>"</div>
+            <div style={{fontSize:15,color:T.text,lineHeight:1.7,fontStyle:"italic",marginBottom:10}}>
+              The hardest financial skill is getting the goalpost to stop moving. If expectations rise with results, there is no logic in striving for more because you'll feel the same after putting in extra effort.
+            </div>
+            <div style={{fontSize:13,fontWeight:600,color:T.textSec}}>
+              — Morgan Housel, <span style={{fontStyle:"italic"}}>The Psychology of Money</span>
+            </div>
+          </div>
+
+          <div style={{background:T.surface,borderRadius:T.radius,border:`1px solid ${T.border}`,padding:"20px 24px",boxShadow:T.shadow,position:"relative"}}>
+            <div style={{fontSize:32,color:T.fire,fontWeight:900,lineHeight:1,marginBottom:4,opacity:0.3}}>"</div>
+            <div style={{fontSize:15,color:T.text,lineHeight:1.7,fontStyle:"italic",marginBottom:10}}>
+              The highest form of wealth is the ability to wake up every morning and say, "I can do whatever I want today." Independence, at any income level, is driven by your savings rate. And past a certain level of income, your savings rate is driven by your ability to keep your lifestyle expectations from running away.
+            </div>
+            <div style={{fontSize:13,fontWeight:600,color:T.textSec}}>
+              — Morgan Housel, <span style={{fontStyle:"italic"}}>The Psychology of Money</span>
+            </div>
+          </div>
+
+          <div style={{background:T.surface,borderRadius:T.radius,border:`1px solid ${T.border}`,padding:"20px 24px",boxShadow:T.shadow,position:"relative"}}>
+            <div style={{fontSize:32,color:T.purple,fontWeight:900,lineHeight:1,marginBottom:4,opacity:0.3}}>"</div>
+            <div style={{fontSize:15,color:T.text,lineHeight:1.7,fontStyle:"italic",marginBottom:10}}>
+              True spending is the stuff you avoid buying and never had to worry about. The art of spending money well is one of the most overlooked and underappreciated financial skills. Getting value from money is an art, not a science. Everyone's different.
+            </div>
+            <div style={{fontSize:13,fontWeight:600,color:T.textSec}}>
+              — Morgan Housel, <span style={{fontStyle:"italic"}}>Same as Ever</span> & <span style={{fontStyle:"italic"}}>The Art of Spending Money</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Value Props */}
-      <div style={{maxWidth:640,margin:"0 auto",padding:"40px 24px",display:"grid",gap:16}}>
+      <div style={{maxWidth:640,margin:"0 auto",padding:"0 24px 40px",display:"grid",gap:16}}>
+        <div style={{fontSize:13,fontWeight:700,color:T.textSec,textTransform:"uppercase",letterSpacing:"0.06em",textAlign:"center",marginBottom:4}}>How EnoughFi helps you</div>
         {[
-          { emoji:"📸", title:"Your Money Snapshot", desc:"Answer 5 simple questions. See your net worth and FIRE number instantly." },
-          { emoji:"🤖", title:"Ask Fi — AI Advisor", desc:"\"Can I buy a ₹2L TV?\" — Fi analyzes your finances and gives personalized advice." },
-          { emoji:"⚡", title:"Quick Add", desc:"One tap to log expenses. No accounting knowledge needed. Ever." },
-          { emoji:"🔥", title:"FIRE Dashboard", desc:"See your progress to financial independence. Every decision shows its impact." },
+          { emoji:"📸", title:"Your Money Snapshot", desc:"Answer 5 simple questions. See your net worth and FIRE number instantly. No accounting knowledge needed." },
+          { emoji:"🤖", title:"Ask Fi — AI Financial Advisor", desc:"\"Can I buy a ₹2L TV?\" — Fi analyzes your real finances and shows the impact on your retirement date." },
+          { emoji:"⚡", title:"Quick Add Expenses", desc:"One tap to log expenses. Pick a category emoji. That's it. Double-entry bookkeeping happens silently in the background." },
+          { emoji:"🔥", title:"FIRE Dashboard", desc:"See your progress to financial freedom. Every spending decision shows its impact on when you can stop working." },
         ].map((f,i) => (
           <div key={i} style={{display:"flex",gap:16,padding:20,background:T.surface,borderRadius:T.radius,border:`1px solid ${T.border}`,boxShadow:T.shadow}}>
             <div style={{fontSize:28,flexShrink:0}}>{f.emoji}</div>
@@ -307,9 +393,25 @@ function LandingPage({onGetStarted, onDemo}) {
         ))}
       </div>
 
+      {/* Already have an account? */}
+      <div style={{maxWidth:640,margin:"0 auto",padding:"0 24px 24px"}}>
+        <div style={{background:T.surfaceAlt,borderRadius:T.radius,border:`1px solid ${T.border}`,padding:"24px",textAlign:"center"}}>
+          <div style={{fontSize:15,fontWeight:600,color:T.text,marginBottom:12}}>Already have an account?</div>
+          <Btn variant="secondary" size="md" onClick={()=>onGetStarted("login")}>
+            Log in to your dashboard →
+          </Btn>
+        </div>
+      </div>
+
       {/* Footer */}
-      <div style={{textAlign:"center",padding:"40px 24px",color:T.textTer,fontSize:13}}>
-        Built for the FIRE community 🇮🇳 &middot; Your data stays yours &middot; No ads, ever
+      <div style={{textAlign:"center",padding:"30px 24px",borderTop:`1px solid ${T.border}`}}>
+        <div style={{fontSize:13,color:T.textTer,lineHeight:1.8}}>
+          Built for the FIRE community 🇮🇳 · Your data stays yours · No ads, ever
+        </div>
+        <div style={{fontSize:11,color:T.textTer,marginTop:8,lineHeight:1.6}}>
+          Quotes from <em>The Psychology of Money</em> & <em>The Art of Spending Money</em> by Morgan Housel. All rights with the author.
+          <br/>EnoughFi is not a financial advisor. Please consult a SEBI-registered advisor for investment decisions.
+        </div>
       </div>
     </div>
   );
@@ -388,29 +490,45 @@ const ONBOARDING_STEPS = [
 ];
 
 const EXPENSE_CATEGORIES = [
-  { id:"rent", label:"Rent / EMI", emoji:"🏠" },
-  { id:"groceries", label:"Groceries", emoji:"🛒" },
-  { id:"utilities", label:"Utilities", emoji:"💡" },
-  { id:"transport", label:"Transport", emoji:"🚗" },
-  { id:"dining", label:"Dining Out", emoji:"🍕" },
-  { id:"shopping", label:"Shopping", emoji:"🛍️" },
-  { id:"health", label:"Health", emoji:"🏥" },
-  { id:"entertainment", label:"Fun", emoji:"🎬" },
+  { id:"rent", label:"Rent / Home EMI", emoji:"🏠" },
+  { id:"groceries", label:"Groceries & Household", emoji:"🛒" },
+  { id:"utilities", label:"Utilities (Elec, Water, WiFi)", emoji:"💡" },
+  { id:"transport", label:"Transport / Fuel", emoji:"🚗" },
+  { id:"dining", label:"Dining Out / Ordering In", emoji:"🍕" },
+  { id:"shopping", label:"Shopping & Personal", emoji:"🛍️" },
+  { id:"health", label:"Health / Insurance", emoji:"🏥" },
+  { id:"education", label:"Education / Kids School", emoji:"📚" },
+  { id:"sip", label:"SIP / Monthly Investments", emoji:"📈" },
+  { id:"remittance", label:"Sending to Family / Parents", emoji:"💝" },
+  { id:"entertainment", label:"Entertainment / Subscriptions", emoji:"🎬" },
   { id:"travel", label:"Travel", emoji:"✈️" },
-  { id:"other", label:"Other", emoji:"📦" },
+  { id:"other", label:"Other Expenses", emoji:"📦" },
 ];
 
 function AmountInput({label, emoji, value, onChange, placeholder}) {
+  const hasValue = parseFloat(value) > 0;
+  const inputRef = useRef(null);
   return (
-    <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:T.surfaceAlt,borderRadius:T.radiusSm,border:`1.5px solid ${T.borderLight}`}}>
-      <span style={{fontSize:24}}>{emoji}</span>
-      <div style={{flex:1}}>
-        <div style={{fontSize:12,fontWeight:600,color:T.textSec,marginBottom:2}}>{label}</div>
-        <div style={{display:"flex",alignItems:"center"}}>
-          <span style={{fontSize:14,fontWeight:600,color:T.textTer,marginRight:4}}>₹</span>
-          <input type="number" value={value||""} onChange={e=>onChange(parseFloat(e.target.value)||0)} placeholder={placeholder||"0"}
-            style={{flex:1,border:"none",background:"transparent",fontSize:18,fontWeight:700,fontFamily:T.font,outline:"none",color:T.text,width:"100%"}}/>
+    <div style={{display:"flex",alignItems:"stretch",gap:0,background:T.surfaceAlt,borderRadius:T.radiusSm,border:`1.5px solid ${hasValue ? T.accent + "60" : T.borderLight}`,overflow:"hidden",transition:"border-color .2s"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:48,flexShrink:0,background:T.surfaceAlt,pointerEvents:"none"}}>
+        <span style={{fontSize:22}}>{emoji}</span>
+      </div>
+      <div style={{flex:1,padding:"10px 14px 8px 0",cursor:"text"}} onClick={()=>inputRef.current?.focus()}>
+        <div style={{fontSize:11,fontWeight:600,color:T.textSec,marginBottom:3,letterSpacing:"0.02em",textTransform:"uppercase",pointerEvents:"none"}}>{label}</div>
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          <span style={{fontSize:15,fontWeight:700,color:hasValue?T.accent:T.textTer,pointerEvents:"none"}}>₹</span>
+          <input ref={inputRef} type="number" value={value||""} onChange={e=>onChange(parseFloat(e.target.value)||0)}
+            placeholder="0"
+            onFocus={e=>e.target.select()}
+            style={{flex:1,border:"none",background:"transparent",fontSize:20,fontWeight:700,fontFamily:T.font,outline:"none",
+              color:hasValue?T.text:T.textTer,width:"100%",padding:0,
+              WebkitAppearance:"none",MozAppearance:"textfield"}}/>
         </div>
+        {hasValue && (
+          <div style={{fontSize:11,color:T.accent,fontWeight:500,marginTop:2,pointerEvents:"none",letterSpacing:"-0.01em"}}>
+            ₹{parseFloat(value).toLocaleString("en-IN")} — {numToWords(value)}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -420,8 +538,8 @@ function OnboardingWizard({onComplete, userName}) {
   const [step,setStep]=useState(0);
   const [saving,setSaving]=useState(false);
   const [data,setData]=useState({
-    bank_balance:0, investments:0, property_value:0, retirement_funds:0, other_assets:0,
-    home_loan:0, credit_card_debt:0, other_loans:0,
+    bank_balance:0, investments:0, property_value:0, retirement_funds:0, other_assets:0, loans_given:0,
+    home_loan:0, credit_card_debt:0, other_loans:0, loans_from_friends:0,
     monthly_income:0, other_income:0,
     monthly_expenses:0, expense_breakdown:{},
     target_retirement_age:45, desired_monthly_income:0, current_age:30,
@@ -485,28 +603,30 @@ function OnboardingWizard({onComplete, userName}) {
         {/* Step Content */}
         <div style={{display:"flex",flexDirection:"column",gap:12,animation:"fadeIn .3s ease"}}>
           {step === 0 && <>
-            <AmountInput emoji="🏦" label="Bank balance (total across all banks)" value={data.bank_balance} onChange={v=>set("bank_balance",v)} placeholder="e.g. 500000"/>
-            <AmountInput emoji="📈" label="Investments (MF, stocks, FD, gold)" value={data.investments} onChange={v=>set("investments",v)} placeholder="e.g. 1000000"/>
-            <AmountInput emoji="🏠" label="Property value" value={data.property_value} onChange={v=>set("property_value",v)} placeholder="e.g. 5000000"/>
-            <AmountInput emoji="🏛️" label="Retirement funds (EPF, PPF, NPS)" value={data.retirement_funds} onChange={v=>set("retirement_funds",v)} placeholder="e.g. 300000"/>
-            <AmountInput emoji="💎" label="Other (crypto, cash, gold jewelry)" value={data.other_assets} onChange={v=>set("other_assets",v)} placeholder="e.g. 100000"/>
+            <AmountInput emoji="🏦" label="Bank balance (all banks combined)" value={data.bank_balance} onChange={v=>set("bank_balance",v)}/>
+            <AmountInput emoji="📈" label="Investments (MF, stocks, FD, gold)" value={data.investments} onChange={v=>set("investments",v)}/>
+            <AmountInput emoji="🏠" label="Property value (house, land, flat)" value={data.property_value} onChange={v=>set("property_value",v)}/>
+            <AmountInput emoji="🏛️" label="Retirement funds (EPF, PPF, NPS)" value={data.retirement_funds} onChange={v=>set("retirement_funds",v)}/>
+            <AmountInput emoji="🤝" label="Loan given to someone (friend, family)" value={data.loans_given} onChange={v=>set("loans_given",v)}/>
+            <AmountInput emoji="💎" label="Other (crypto, cash, gold jewelry)" value={data.other_assets} onChange={v=>set("other_assets",v)}/>
             <div style={{textAlign:"center",padding:"12px 0",fontSize:13,color:T.textTer}}>
               Don't have exact numbers? Estimates are fine — you can update later.
             </div>
           </>}
 
           {step === 1 && <>
-            <AmountInput emoji="🏠" label="Home loan outstanding" value={data.home_loan} onChange={v=>set("home_loan",v)} placeholder="e.g. 3000000"/>
-            <AmountInput emoji="💳" label="Credit card outstanding" value={data.credit_card_debt} onChange={v=>set("credit_card_debt",v)} placeholder="e.g. 15000"/>
-            <AmountInput emoji="📝" label="Other loans (car, personal, education)" value={data.other_loans} onChange={v=>set("other_loans",v)} placeholder="e.g. 200000"/>
+            <AmountInput emoji="🏠" label="Home loan outstanding" value={data.home_loan} onChange={v=>set("home_loan",v)}/>
+            <AmountInput emoji="💳" label="Credit card outstanding" value={data.credit_card_debt} onChange={v=>set("credit_card_debt",v)}/>
+            <AmountInput emoji="📝" label="Other loans (car, personal, education)" value={data.other_loans} onChange={v=>set("other_loans",v)}/>
+            <AmountInput emoji="🤝" label="Borrowed from friends / family" value={data.loans_from_friends} onChange={v=>set("loans_from_friends",v)}/>
             <div style={{textAlign:"center",padding:"12px 0",fontSize:13,color:T.textTer}}>
               No debts? Lucky you! Just click Next.
             </div>
           </>}
 
           {step === 2 && <>
-            <AmountInput emoji="💼" label="Monthly salary (take-home, after tax)" value={data.monthly_income} onChange={v=>set("monthly_income",v)} placeholder="e.g. 125000"/>
-            <AmountInput emoji="💸" label="Other monthly income (rent, freelance, dividends)" value={data.other_income} onChange={v=>set("other_income",v)} placeholder="e.g. 10000"/>
+            <AmountInput emoji="💼" label="Monthly salary (take-home, after tax)" value={data.monthly_income} onChange={v=>set("monthly_income",v)}/>
+            <AmountInput emoji="💸" label="Other monthly income (rent, freelance, dividends)" value={data.other_income} onChange={v=>set("other_income",v)}/>
           </>}
 
           {step === 3 && <>
@@ -515,14 +635,18 @@ function OnboardingWizard({onComplete, userName}) {
               <Btn variant={expenseMode==="detailed"?"primary":"secondary"} size="sm" onClick={()=>setExpenseMode("detailed")}>Detailed breakdown</Btn>
             </div>
             {expenseMode === "quick" ? (
-              <AmountInput emoji="🛒" label="Total monthly expenses (roughly)" value={data.monthly_expenses} onChange={v=>set("monthly_expenses",v)} placeholder="e.g. 80000"/>
+              <AmountInput emoji="🛒" label="Total monthly expenses (roughly)" value={data.monthly_expenses} onChange={v=>set("monthly_expenses",v)}/>
             ) : (
               <>
                 {EXPENSE_CATEGORIES.map(cat => (
                   <AmountInput key={cat.id} emoji={cat.emoji} label={cat.label} value={data.expense_breakdown[cat.id]} onChange={v=>setExpCat(cat.id,v)} placeholder="0"/>
                 ))}
+                <div style={{fontSize:11,color:T.textTer,textAlign:"center",padding:"4px 12px",lineHeight:1.5}}>
+                  💡 Include SIP/investments here — they're monthly outflows from your salary. Your investment account balance is tracked separately under assets.
+                </div>
                 <div style={{textAlign:"center",padding:"8px 0",fontSize:14,fontWeight:700,color:T.accent}}>
                   Total: ₹{totalExpenseDetailed.toLocaleString("en-IN")}/month
+                  {totalExpenseDetailed > 0 && <span style={{fontSize:12,fontWeight:500,color:T.textSec}}> ({numToWords(totalExpenseDetailed)})</span>}
                 </div>
               </>
             )}
@@ -546,8 +670,7 @@ function OnboardingWizard({onComplete, userName}) {
               <div style={{fontSize:12,color:T.textTer,marginTop:6}}>That's {data.target_retirement_age - data.current_age} years from now</div>
             </div>
 
-            <AmountInput emoji="🏖️" label="Desired monthly income after retirement" value={data.desired_monthly_income} onChange={v=>set("desired_monthly_income",v)}
-              placeholder={`e.g. ${Math.round((data.monthly_expenses || 50000) * 0.7)}`}/>
+            <AmountInput emoji="🏖️" label="Desired monthly income after retirement" value={data.desired_monthly_income} onChange={v=>set("desired_monthly_income",v)}/>
             <div style={{fontSize:12,color:T.textTer,textAlign:"center"}}>
               Rule of thumb: 60-80% of current expenses. Leave blank for auto-calculation.
             </div>
@@ -691,8 +814,10 @@ const QUICK_CATEGORIES = [
   { name:"Groceries", emoji:"🛒" }, { name:"Dining Out", emoji:"🍕" },
   { name:"Transport", emoji:"🚗" }, { name:"Shopping", emoji:"🛍️" },
   { name:"Utilities", emoji:"💡" }, { name:"Health", emoji:"🏥" },
-  { name:"Entertainment", emoji:"🎬" }, { name:"Rent/EMI", emoji:"🏠" },
-  { name:"Travel", emoji:"✈️" }, { name:"Other Expenses", emoji:"📦" },
+  { name:"Education", emoji:"📚" }, { name:"SIP/Investments", emoji:"📈" },
+  { name:"Sending to Family", emoji:"💝" }, { name:"Entertainment", emoji:"🎬" },
+  { name:"Rent/EMI", emoji:"🏠" }, { name:"Travel", emoji:"✈️" },
+  { name:"Other Expenses", emoji:"📦" },
 ];
 
 function QuickAddModal({open, onClose, toast}) {
