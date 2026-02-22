@@ -534,7 +534,7 @@ function AmountInput({label, emoji, value, onChange, placeholder}) {
   );
 }
 
-function OnboardingWizard({onComplete, userName}) {
+function OnboardingWizard({onComplete, userName, onSkip}) {
   const [step,setStep]=useState(0);
   const [saving,setSaving]=useState(false);
   const [data,setData]=useState({
@@ -586,6 +586,14 @@ function OnboardingWizard({onComplete, userName}) {
     <div style={{minHeight:"100vh",background:`linear-gradient(180deg, ${T.accentLight} 0%, ${T.bg} 30%)`,fontFamily:T.font,padding:24}}>
       <GlobalStyles/>
       <div style={{maxWidth:480,margin:"0 auto"}}>
+        {/* Skip option for existing users */}
+        {onSkip && (
+          <div style={{textAlign:"right",marginBottom:8}}>
+            <button onClick={onSkip} style={{background:"none",border:"none",cursor:"pointer",color:T.textTer,fontSize:13,fontWeight:500,fontFamily:T.font,padding:"4px 0",textDecoration:"underline",textUnderlineOffset:2}}>
+              Skip setup, go to dashboard →
+            </button>
+          </div>
+        )}
         {/* Progress */}
         <div style={{display:"flex",gap:6,marginBottom:32}}>
           {ONBOARDING_STEPS.map((s,i) => (
@@ -1506,7 +1514,10 @@ export default function App() {
 
   if(page==="landing"&&!user) return <LandingPage onGetStarted={(mode)=>{setAuthMode(mode);setPage("auth")}} onDemo={handleDemoLogin}/>;
   if(page==="auth"&&!user) return <AuthScreen onLogin={handleLogin} initialMode={authMode} onBack={()=>setPage("landing")}/>;
-  if(page==="onboarding"&&user) return <OnboardingWizard onComplete={handleOnboardingComplete} userName={user?.name}/>;
+  if(page==="onboarding"&&user) return <OnboardingWizard onComplete={handleOnboardingComplete} userName={user?.name} onSkip={async()=>{
+    try { await api.call("PUT","/onboarding/skip"); } catch(e) {}
+    setPage("app");loadFireData();toast("Skipped setup. You can fill it anytime from Settings.","info");
+  }}/>;
   if(!user) return <LandingPage onGetStarted={(mode)=>{setAuthMode(mode);setPage("auth")}} onDemo={handleDemoLogin}/>;
 
   const isAdmin = user?.is_admin;
